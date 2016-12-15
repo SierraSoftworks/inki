@@ -8,7 +8,7 @@ pipeline:
         image: golang:1.7
         commands:
             - go get -v ./...
-            - "CGO_ENABLED=0 GOOS=linux go build -o bin/inki -a -installsuffix cgo -ldflags '-s -X main.version=${DRONE_TAG=v1.0.0}-${DRONE_BRANCH}.${DRONE_COMMIT:0:6}"
+            - "CGO_ENABLED=0 GOOS=linux go build -o bin/inki -a -installsuffix cgo -ldflags '-s -X main.version=${DRONE_TAG=v1.0.0}-${DRONE_BRANCH}.${DRONE_COMMIT:0:6}'"
 
     docker:
         image: plugins/docker
