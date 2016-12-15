@@ -1,0 +1,24 @@
+workspace:
+    base: /go
+    path: src/github.com/SierraSoftworks/inki
+
+pipeline:
+
+    go:build:
+        image: golang:1.7
+        commands:
+            - go get -v ./...
+            - "CGO_ENABLED=0 GOOS=linux go build -o bin/inki -a -installsuffix cgo -ldflags '-s -X main.version=${DRONE_TAG=v1.0.0}-${DRONE_BRANCH}.${DRONE_COMMIT:0:6}"
+
+    docker:
+        image: plugins/docker
+        repo: sierrasoftworks/inki
+        tag:
+            - latest
+            - "${DRONE_COMMIT_BRANCH}"
+            - "go"
+        username: "${DOCKER_USERNAME}"
+        password: "${DOCKER_PASSWORD}"
+        email: "${DOCKER_EMAIL}"
+        build_args:
+            - "VERSION=${DRONE_COMMIT_SHA}"
