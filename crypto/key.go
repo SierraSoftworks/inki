@@ -7,9 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"strings"
-
-	"golang.org/x/crypto/openpgp"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -18,58 +15,21 @@ type ShortKey struct {
 	Fingerprint string `json:"fingerprint"`
 }
 
-type signingData struct {
-	Expires   time.Time `json:"expire"`
-	PublicKey string    `json:"key"`
-	User      string    `json:"user"`
-}
-
 type Key struct {
 	Expires   time.Time `json:"expire"`
 	PublicKey string    `json:"key"`
 	User      string    `json:"user"`
-	Signature string    `json:"signature"`
 }
 
-func (k *Key) IsValid(keyring openpgp.KeyRing) bool {
+func (k *Key) Validate() error {
 	_, _, _, _, err := ssh.ParseAuthorizedKey([]byte(k.PublicKey))
 	if err != nil {
-		return false
-	}
-
-	data := bytes.NewBuffer([]byte{})
-	json.NewEncoder(data).Encode(&struct {
-		Expires   time.Time `json:"expire"`
-		PublicKey string    `json:"key"`
-		User      string    `json:"user"`
-	}{
-		Expires:   k.Expires,
-		PublicKey: k.PublicKey,
-		User:      k.User,
-	})
-	sigReader := strings.NewReader(k.Signature)
-	_, err = openpgp.CheckDetachedSignature(keyring, data, sigReader)
-	if err != nil {
-		return false
-	}
-
-	return true
-}
-
-func (k *Key) Sign(signer *openpgp.Entity) error {
-	keyData, err := k.SigningData()
-	if err != nil {
 		return err
 	}
 
-	out := bytes.NewBuffer([]byte{})
-	keyReader := bytes.NewBuffer(keyData)
-	err = openpgp.DetachSign(out, signer, keyReader, nil)
-	if err != nil {
-		return err
+	if time.Now().After(k.Expires) {
+		return fmt.Errorf("key has expired")
 	}
-
-	k.Signature = out.String()
 
 	return nil
 }
@@ -97,14 +57,8 @@ func (k *Key) Shorten() *ShortKey {
 }
 
 func (k *Key) SigningData() ([]byte, error) {
-	data := &signingData{
-		User:      k.User,
-		PublicKey: k.PublicKey,
-		Expires:   k.Expires,
-	}
-
 	out := bytes.NewBuffer([]byte{})
-	if err := json.NewEncoder(out).Encode(data); err != nil {
+	if err := json.NewEncoder(out).Encode(k); err != nil {
 		return nil, err
 	}
 

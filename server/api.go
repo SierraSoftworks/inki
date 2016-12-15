@@ -1,11 +1,14 @@
 package server
 
 import (
+	"bytes"
+
 	"github.com/SierraSoftworks/girder"
 	"github.com/SierraSoftworks/girder/errors"
 	"github.com/SierraSoftworks/inki/crypto"
 	log "github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
+	"golang.org/x/crypto/openpgp"
 )
 
 var router = mux.NewRouter()
@@ -48,6 +51,12 @@ func init() {
 		Methods("GET").
 		Handler(girder.NewHandler(getKeysForUser)).
 		Name("GET /user/{user}/keys")
+
+	Router().
+		Path("/v1/user/{user}/key/{fingerprint}").
+		Methods("GET").
+		Handler(girder.NewHandler(getKeyForUser)).
+		Name("GET /user/{user}/key/{fingerprint}")
 }
 
 func getAllKeys(c *girder.Context) (interface{}, error) {
@@ -58,18 +67,82 @@ func getKeysForUser(c *girder.Context) (interface{}, error) {
 	return GetKeysBy(UserEquals(c.Vars["user"])), nil
 }
 
-func addKey(c *girder.Context) (interface{}, error) {
-	var req crypto.Key
-	if err := c.ReadBody(&req); err != nil {
-		return nil, err
+func getKeyForUser(c *girder.Context) (interface{}, error) {
+	k := GetKeyBy(UserEquals(c.Vars["user"]).And(FingerprintEquals(c.Vars["fingerprint"])))
+	if k == nil {
+		return nil, errors.NotFound()
 	}
 
-    user := GetConfig().GetUser(req.User)
-    
+	return k, nil
+}
 
-    req.IsValid()
+func addKey(c *girder.Context) (interface{}, error) {
+	d := bytes.NewBuffer([]byte{})
+	d.ReadFrom(c.Request.Body)
 
-	AddKey(&req)
+	reqs, err := crypto.ReadRequests(d.Bytes())
+	if err != nil {
+		log.WithError(err).Warn("Failed to decode armored request data")
+		return nil, errors.BadRequest()
+	}
 
-	return req.Shorten(), nil
+	keys := []crypto.Key{}
+	for _, r := range reqs {
+		var key crypto.Key
+		err := r.DecodeJSON(&key)
+		if err != nil {
+			log.WithError(err).Warn("Failed to decode JSON in request body")
+			return nil, errors.BadRequest()
+		}
+
+		log.WithFields(log.Fields{
+			"user":   key.User,
+			"expire": key.Expires,
+			"key":    key.PublicKey,
+		}).Debug("Decoded key information")
+
+		if err := key.Validate(); err != nil {
+			log.WithError(err).Warn("Key data was not in a valid format, or has expired")
+			return nil, errors.BadRequest()
+		}
+
+		user := GetConfig().GetUser(key.User)
+		if user == nil {
+			log.WithField("user", key.User).Warn("No configuration entry for this user")
+			return nil, errors.NotAllowed()
+		}
+
+		kr, err := user.GetKeyRing()
+		if err != nil {
+			log.WithError(err).Warn("Could not load user's keyring")
+			return nil, errors.ServerError()
+		}
+
+		s := bytes.NewBuffer([]byte{})
+		s.ReadFrom(r.Signature.Body)
+
+		signer, err := openpgp.CheckDetachedSignature(kr, bytes.NewBuffer(r.Payload), s)
+		if err != nil {
+			log.WithError(err).Warn("Failed to check request signature")
+			return nil, errors.Unauthorized()
+		}
+
+		if signer == nil {
+			log.Warn("No signatory found for the request")
+			return nil, errors.Unauthorized()
+		}
+
+		log.WithFields(log.Fields{
+			"user":   key.User,
+			"key":    key.PublicKey,
+			"expire": key.Expires,
+		}).Debug("Accepted new key")
+		keys = append(keys, key)
+	}
+
+	for _, k := range keys {
+		AddKey(&k)
+	}
+
+	return keys, nil
 }

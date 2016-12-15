@@ -21,9 +21,20 @@ are accepted.
 
 ## Example
 ```
-$ inki add-key root@inki.sierrasoftworks.com -f my_key.pub -p sign.key
-Key accepted for user "root@inki.sierrasoftworks.com"
-$ inki keys root@inki.sierrasoftworks.com
+$ inki key add http://bpannell@inki.sierrasoftworks.com -f my_key.pub -p sign.key
+Enter PGP key password:
+Added keys:
+ - Username:     bpannell
+   Fingerprint:  7646dd89cbbcecbfeda2ba1d80ec9451
+   Expires:      2016-12-15 14:30:42.9195054 +0000 UTC
+  
+$ inki key list http://bpannell@inki.sierrasoftworks.com
+Authorized keys:
+ - Username:     bpannell
+   Fingerprint:  7646dd89cbbcecbfeda2ba1d80ec9451
+   Expires:      2016-12-15 14:30:42.9195054 +0000 UTC
+
+$ inki authorized-keys bpannell
 ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDArmZ5fyEt1V9KiGFuiZ...
 ```
 
