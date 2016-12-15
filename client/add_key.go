@@ -175,7 +175,7 @@ var addKeyCommand = cli.Command{
 			log.
 				WithError(err).
 				WithFields(log.Fields{
-					"server": GetConfig().Server,
+					"server": u.Host,
 				}).
 				Debug("Failed to send key request to server")
 			return fmt.Errorf("Request to send key request to server '%s'", u.Host)

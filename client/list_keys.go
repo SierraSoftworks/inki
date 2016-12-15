@@ -16,7 +16,16 @@ import (
 var listKeysCommand = cli.Command{
 	Name:  "list",
 	Usage: "Gets the list of keys currently registered on the server",
-	Flags: []cli.Flag{},
+	Flags: []cli.Flag{
+		cli.BoolFlag{
+			Name:  "authorized-keys, a",
+			Usage: "Format the resulting data in a way that is compatible with authorized_keys",
+		},
+		cli.BoolFlag{
+			Name:  "expired, x",
+			Usage: "Includes keys which have expired in the output",
+		},
+	},
 	Before: func(c *cli.Context) error {
 		log.SetOutput(os.Stderr)
 		return nil
@@ -41,7 +50,8 @@ var listKeysCommand = cli.Command{
 			u.Scheme = "http"
 		}
 
-		url := fmt.Sprintf("%s://%s", u.Scheme, u.Host)
+		server := fmt.Sprintf("%s://%s", u.Scheme, u.Host)
+		url := server
 		if u.User.Username() != "" {
 			url = fmt.Sprintf("%s/api/v1/user/%s/keys", url, u.User.Username())
 		} else {
@@ -55,7 +65,7 @@ var listKeysCommand = cli.Command{
 		}
 
 		log.WithFields(log.Fields{
-			"server": GetConfig().Server,
+			"server": server,
 			"user":   u.User.Username(),
 		}).Info("Fetching authorized keys")
 
@@ -68,7 +78,7 @@ var listKeysCommand = cli.Command{
 		if res.StatusCode != 200 {
 			log.WithFields(log.Fields{
 				"user":   u.User.Username(),
-				"server": GetConfig().Server,
+				"server": server,
 				"status": res.StatusCode,
 			}).Error("Failed to get list of keys")
 			return fmt.Errorf("Failed to get list of keys")
@@ -80,12 +90,25 @@ var listKeysCommand = cli.Command{
 			return fmt.Errorf("Failed to parse response from server")
 		}
 
-		fmt.Println("Authorized keys:")
-		for _, k := range keys {
-			fmt.Printf(" - Username:     %s\n", k.User)
-			fmt.Printf("   Fingerprint:  %s\n", k.Fingerprint())
-			fmt.Printf("   Expires:      %s\n", k.Expires)
-			fmt.Println()
+		allowExpired := c.IsSet("expired")
+		if c.IsSet("authorized-keys") {
+			for _, k := range keys {
+				err := k.Validate()
+				if allowExpired || err == nil {
+					fmt.Printf("%s\n", k.PublicKey)
+				}
+			}
+		} else {
+			fmt.Println("Authorized keys:")
+			for _, k := range keys {
+				err := k.Validate()
+				if allowExpired || err == nil {
+					fmt.Printf(" - Username:     %s\n", k.User)
+					fmt.Printf("   Fingerprint:  %s\n", k.Fingerprint())
+					fmt.Printf("   Expires:      %s\n", k.Expires)
+					fmt.Println()
+				}
+			}
 		}
 
 		return nil

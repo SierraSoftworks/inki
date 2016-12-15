@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/SierraSoftworks/girder"
 	"github.com/SierraSoftworks/girder/errors"
@@ -53,6 +54,12 @@ func init() {
 		Name("GET /user/{user}/keys")
 
 	Router().
+		Path("/v1/user/{user}/authorized_keys").
+		Methods("GET").
+		Handler(girder.NewHandler(getAuthorizedKeysForUser)).
+		Name("GET /user/{user}/authorized_keys")
+
+	Router().
 		Path("/v1/user/{user}/key/{fingerprint}").
 		Methods("GET").
 		Handler(girder.NewHandler(getKeyForUser)).
@@ -65,6 +72,22 @@ func getAllKeys(c *girder.Context) (interface{}, error) {
 
 func getKeysForUser(c *girder.Context) (interface{}, error) {
 	return GetKeysBy(UserEquals(c.Vars["user"])), nil
+}
+
+func getAuthorizedKeysForUser(c *girder.Context) (interface{}, error) {
+	keys := GetKeysBy(UserEquals(c.Vars["user"]))
+
+	b := bytes.NewBuffer([]byte{})
+	for _, k := range keys {
+		if err := k.Validate(); err == nil {
+			b.WriteString(fmt.Sprintf("%s\n", k.PublicKey))
+		}
+	}
+
+	c.ResponseHeaders.Set("Content-Type", "text/plain")
+	c.Formatter = &StringFormatter{}
+
+	return b.String(), nil
 }
 
 func getKeyForUser(c *girder.Context) (interface{}, error) {

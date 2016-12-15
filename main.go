@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-
 	"strings"
 
 	"github.com/SierraSoftworks/inki/client"
@@ -50,7 +49,6 @@ func main() {
 
 	app.Commands = []cli.Command{
 		server.Command,
-		agent.AuthorizedKeysCommand,
 		client.KeysCommands,
 	}
 

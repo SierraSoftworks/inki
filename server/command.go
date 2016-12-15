@@ -18,7 +18,13 @@ var Command = cli.Command{
 			Name:   "config, c",
 			Usage:  "The configuration file to be used by this daemon",
 			EnvVar: "INKI_CONFIG",
-			Value:  "/etc/inki/config.yml",
+			Value:  "/etc/inki/server.yml",
+		},
+		cli.IntFlag{
+			Name:   "port, P",
+			Usage:  "The port on which the Inki server should listen",
+			EnvVar: "PORT",
+			Value:  3000,
 		},
 	},
 	Before: func(c *cli.Context) error {
@@ -35,8 +41,8 @@ var Command = cli.Command{
 		return nil
 	},
 	Action: func(c *cli.Context) error {
-		cfg := GetConfig()
-		log.WithField("port", cfg.Port).Info("Starting server")
+		port := c.Int("port")
+		log.WithField("port", port).Info("Starting server")
 
 		mux := http.NewServeMux()
 		mux.Handle("/api/", http.StripPrefix("/api", Router()))
@@ -46,7 +52,7 @@ var Command = cli.Command{
 			w.Write([]byte(`{"code": 404, "error": "Not Found", "message": "The method you attempted to make use of could not be found on our system."}`))
 		})
 
-		return http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", cfg.Port), cors.New(cors.Options{
+		return http.ListenAndServe(fmt.Sprintf("0.0.0.0:%d", port), cors.New(cors.Options{
 			AllowCredentials: true,
 			AllowedOrigins:   []string{"*"},
 			AllowedHeaders:   []string{"Authorization", "Content-Type"},
